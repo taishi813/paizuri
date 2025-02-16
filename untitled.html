@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>パイズリバトル</title>
+    <style>
+        body { text-align: center; background-color: #fdd; font-family: Arial, sans-serif; }
+        #battle-log { height: 200px; overflow-y: scroll; border: 1px solid #000; background: #fff; padding: 10px; }
+        
+        .bar-container {
+            width: 80%; background: #eee; margin: 10px auto; 
+            position: relative; height: 30px; border-radius: 15px; 
+            overflow: hidden; border: 2px solid #000;
+        }
+        .bar { height: 100%; transition: width 0.5s; text-align: center; line-height: 30px; color: white; font-weight: bold; font-size: 18px; }
+        #taishi-bar { background: linear-gradient(to right, blue, lightblue); }
+        #opponent-bar { background: linear-gradient(to right, red, magenta); }
+
+        .button { padding: 10px; margin: 5px; cursor: pointer; background: pink; border: none; font-size: 16px; }
+        #finish-screen { display: none; font-size: 24px; font-weight: bold; padding: 20px; background: white; border: 2px solid #000; }
+    </style>
+</head>
+<body>
+    <h1>パイズリバトル</h1>
+    <p>ステージを選択:</p>
+    <button class="button" onclick="selectStage('プール')">プール</button>
+    <button class="button" onclick="selectStage('混浴')">混浴</button>
+    <button class="button" onclick="selectStage('ホテル')">ホテル</button>
+
+    <div id="battle" style="display:none;">
+        <h2 id="opponent-name"></h2>
+        <div class="bar-container"><div id="opponent-bar" class="bar">0</div></div>
+        <p>大志</p>
+        <div class="bar-container"><div id="taishi-bar" class="bar">0</div></div>
+
+        <button class="button" onclick="playerAction('耐久')">耐久</button>
+        <button class="button" onclick="playerAction('回避')">回避</button>
+        <button class="button" onclick="playerAction('カウンター')">カウンター</button>
+        <button class="button" onclick="playerAction('回復')">回復</button>
+
+        <div id="battle-log"></div>
+        <div id="finish-screen"></div>
+        <button class="button" id="retry-button" style="display:none;" onclick="startBattle()">再戦</button>
+    </div>
+
+<script>
+    let stage = "";
+    let taishiHP = 200;
+    let opponentHP = 40;
+    let currentOpponent = null;
+    let wins = 0;
+    let losses = 0;
+
+    const opponents = [
+        { 
+            name: "根本はるみ", 
+            hp: 50, 
+            attack: 20, 
+            healChance: 0.5, 
+            appearanceRate: 30, 
+            favoriteStage: "ホテル",
+            attackMessages: ["爆乳プレス！", "圧殺パイズリ！", "乳圧メガクラッシュ！"],
+            preBattleMessage: "覚悟しなさい、大志！",
+            victoryMessage: "根本「こんなに強いなんて…最高♡」",
+            defeatMessage: "根本「ちょっとぉ…もう出ちゃったのー？♡♡」"
+        },
+        { 
+            name: "相澤仁美", 
+            hp: 40, 
+            attack: 15, 
+            healChance: 0.3, 
+            appearanceRate: 25, 
+            favoriteStage: "混浴",
+            attackMessages: ["密着パイズリ！", "むぎゅっと爆乳アタック！", "滑らか乳首スライド！"],
+            preBattleMessage: "準備はいい？大志！",
+            victoryMessage: "相澤「やっぱりあなたは強いね…！♡」",
+            defeatMessage: "相澤「さすが大志…濃いわね♡！」"
+        },
+        { 
+            name: "MEGUMI", 
+            hp: 40, 
+            attack: 15, 
+            healChance: 0.3, 
+            appearanceRate: 25, 
+            favoriteStage: "プール",
+            attackMessages: ["ぬるぬるパイズリ！", "水着ごと圧殺！", "トルネード乳首責め！"],
+            preBattleMessage: "これから、楽しませてあげるわ♡",
+            victoryMessage: "MEGUMI「うっそ、私が負けちゃうなんて……！。」",
+            defeatMessage: "「楽しかったわ♡また遊んであげる」"
+        }
+    ];
+
+    function selectStage(selectedStage) {
+        stage = selectedStage;
+        document.getElementById("battle").style.display = "block";
+        document.getElementById("finish-screen").style.display = "none";
+        document.getElementById("battle-log").innerHTML = ""; // ログリセット
+        document.getElementById("retry-button").style.display = "none"; // 再戦ボタン非表示
+        startBattle();
+    }
+
+    function startBattle() {
+        currentOpponent = getRandomOpponent();
+        document.getElementById("opponent-name").innerHTML = `🔥 <span style="color: black;">ビキニ姿の${currentOpponent.name}が現れた！</span>`;
+
+        taishiHP = 200;
+        opponentHP = currentOpponent.hp;
+
+        // 試合開始前のセリフ
+        logMessage(`<span style="color: black;">${currentOpponent.preBattleMessage}</span>`);
+
+        if (stage === currentOpponent.favoriteStage) {
+            currentOpponent.hp += 10;
+            currentOpponent.attack += 5;
+            logMessage(`<span style="color: magenta;">✨ ${currentOpponent.name}は得意ステージで強化された！</span>`);
+        }
+
+        updateBars();
+        opponentAttack();
+    }
+
+    function getRandomOpponent() {
+        let totalRate = opponents.reduce((sum, opponent) => sum + opponent.appearanceRate, 0);
+        let randomValue = Math.random() * totalRate;
+
+        let sumRate = 0;
+        for (let opponent of opponents) {
+            sumRate += opponent.appearanceRate;
+            if (randomValue < sumRate) return opponent;
+        }
+        return opponents[0];
+    }
+
+    function updateBars() {
+        let taishiBar = document.getElementById("taishi-bar");
+        let opponentBar = document.getElementById("opponent-bar");
+
+        taishiBar.style.width = (taishiHP / 200) * 100 + "%";
+        opponentBar.style.width = (opponentHP / currentOpponent.hp) * 100 + "%";
+
+        taishiBar.innerText = `${taishiHP}`;
+        opponentBar.innerText = `${opponentHP}`;
+    }
+
+    function opponentAttack() {
+        let attackPower = currentOpponent.attack;
+        let attackMessage = currentOpponent.attackMessages[Math.floor(Math.random() * currentOpponent.attackMessages.length)];
+        
+        logMessage(`<span style="color: magenta;">⚡ ${currentOpponent.name}の攻撃！🔥 **${attackMessage}**！</span>`);
+        taishiHP -= attackPower;
+        logMessage(`<span style="color: magenta;">⚡ ダメージ: ${attackPower}</span>`);
+        updateBars();
+
+        if (Math.random() < currentOpponent.healChance && opponentHP < currentOpponent.hp) {
+            opponentHP += 5;
+            logMessage(`<span style="color: magenta;">✨ ${currentOpponent.name}が **乳圧リカバリー** で回復！</span>`);
+            updateBars();
+        }
+
+        if (taishiHP <= 0) {
+            taishiHP = 0;
+            updateBars();
+            showFinishScreen(false);
+        }
+    }
+
+    function playerAction(action) {
+        let damage = 0;
+        if (action === "耐久") {
+            damage = 5;
+            logMessage(`<span style="color: blue;">🔥 **フル勃起耐久**！ 大志「耐えてみせる！」</span>`);
+        } else if (action === "回避") {
+            damage = 3;
+            logMessage(`<span style="color: blue;">🔥 **チンポビンタ**！ 大志「うおっ！！」</span>`);
+        } else if (action === "カウンター") {
+            damage = 10;
+            logMessage(`<span style="color: blue;">🔥 **腰振りパイズリ**！ 大志「ふんっ！ふんっ！ふんっ！ふんっ！」</span>`);
+        } else if (action === "回復") {
+            let healAmount = (stage === "混浴") ? 30 : 20;
+            taishiHP += healAmount;
+            logMessage(`<span style="color: blue;">✨ **勃起力回復**！ 大志が${healAmount}回復！</span>`);
+            updateBars();
+            opponentAttack();
+            return;
+        }
+
+        opponentHP -= damage;
+        logMessage(`<span style="color: blue;">🔥 ダメージ: ${damage}</span>`);
+
+        if (opponentHP <= 0) {
+            opponentHP = 0;
+            updateBars();
+            showFinishScreen(true);
+        } else {
+            opponentAttack();
+        }
+    }
+
+    function logMessage(message) {
+        let log = document.getElementById("battle-log");
+        log.innerHTML += message + "<br>";
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function showFinishScreen(victory) {
+        let finishScreen = document.getElementById("finish-screen");
+        finishScreen.style.display = "block";
+        if (victory) {
+            wins++;
+            finishScreen.innerHTML = `<span style="color: magenta;">Finish! 大志の勝利♡♡</span><br><span style="color: magenta;">${currentOpponent.victoryMessage}</span>`;
+        } else {
+            losses++;
+            finishScreen.innerHTML = `<span style="color: red;">Finish! 大志の敗北♡</span><br><span style="color: red;">${currentOpponent.defeatMessage}</span>`;
+        }
+        document.getElementById("retry-button").style.display = "block";
+        document.getElementById("stats").innerText = `戦績: ${wins}勝 / ${losses}敗`;
+    }
+</script>
+
+</body>
+</html>
