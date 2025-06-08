@@ -1,0 +1,98 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>わち vs 大志 パイズリバトル</title>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #f9f9f9; padding: 20px; }
+    .section { margin-bottom: 20px; }
+    button { font-size: 1.2em; margin: 5px; padding: 10px; }
+    .log { background: #fff; border: 1px solid #ccc; padding: 10px; height: 200px; overflow-y: scroll; }
+  </style>
+</head>
+<body>
+  <h1>わち vs 大志 パイズリバトル</h1>
+
+  <div class="section">
+    <strong>わち HP:</strong> <span id="wachiHp">--</span><br>
+    <strong>大志 HP:</strong> <span id="taishiHp">--</span><br>
+    <strong>現在のターン:</strong> <span id="turnDisplay">--</span>
+  </div>
+
+  <div class="section">
+    <button onclick="attack('wachi')">わちの攻撃</button>
+    <button onclick="attack('taishi')">大志の攻撃</button>
+    <button onclick="resetGame()">リセット</button>
+  </div>
+
+  <div class="section log" id="logBox"></div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDw4UEwVm2h8bY5QLzE9cJUyodoqT6QD7E",
+      authDomain: "paizuri-battle.firebaseapp.com",
+      databaseURL: "https://paizuri-battle-default-rtdb.firebaseio.com",
+      projectId: "paizuri-battle",
+      storageBucket: "paizuri-battle.firebasestorage.app",
+      messagingSenderId: "336687148800",
+      appId: "1:336687148800:web:cd4a28f9a1cf66a77b4de5"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const wachiHpSpan = document.getElementById("wachiHp");
+    const taishiHpSpan = document.getElementById("taishiHp");
+    const logBox = document.getElementById("logBox");
+    const turnDisplay = document.getElementById("turnDisplay");
+
+    function updateUI(snapshot) {
+      const data = snapshot.val();
+      wachiHpSpan.textContent = data.hp?.wachi ?? "--";
+      taishiHpSpan.textContent = data.hp?.taishi ?? "--";
+      turnDisplay.textContent = data.turn === 'wachi' ? 'わち' : '大志';
+      logBox.innerHTML = (data.log || []).map(entry => `<div>${entry}</div>`).join('');
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    db.ref().on('value', updateUI);
+
+    function rollDice() {
+      return Math.floor(Math.random() * 6 + 1) + Math.floor(Math.random() * 6 + 1);
+    }
+
+    function attack(attacker) {
+      db.ref().once('value').then(snapshot => {
+        const data = snapshot.val();
+        if (data.turn !== attacker) return;
+
+        const damage = rollDice();
+        const opponent = attacker === 'wachi' ? 'taishi' : 'wachi';
+        const newHp = Math.max(0, (data.hp[opponent] || 0) - damage);
+        const log = data.log || [];
+        log.push(`${attacker === 'wachi' ? 'わち' : '大志'}の攻撃！ ${damage} ダメージ！`);
+
+        if (newHp === 0) {
+          log.push(`${attacker === 'wachi' ? 'わち' : '大志'}の勝利！`);
+        }
+
+        db.ref().update({
+          [`hp/${opponent}`]: newHp,
+          log: log,
+          turn: newHp === 0 ? null : opponent
+        });
+      });
+    }
+
+    function resetGame() {
+      db.ref().set({
+        hp: { wachi: 25, taishi: 25 },
+        log: ["バトルスタート！"],
+        turn: "wachi"
+      });
+    }
+  </script>
+</body>
+</html>
