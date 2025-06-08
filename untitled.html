@@ -1,222 +1,182 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>パイズリバトル</title>
-    <style>
-        body { text-align: center; background-color: #fdd; font-family: Arial, sans-serif; }
-        #battle-log { height: 200px; overflow-y: scroll; border: 1px solid #000; background: #fff; padding: 10px; }
-        
-        .bar-container {
-            width: 80%; background: #eee; margin: 10px auto; 
-            position: relative; height: 30px; border-radius: 15px; 
-            overflow: hidden; border: 2px solid #000;
-        }
-        .bar { height: 100%; transition: width 0.5s; text-align: center; line-height: 30px; color: white; font-weight: bold; font-size: 18px; }
-        #taishi-bar { background: linear-gradient(to right, blue, lightblue); }
-        #opponent-bar { background: linear-gradient(to right, red, magenta); }
-
-        .button { padding: 10px; margin: 5px; cursor: pointer; background: pink; border: none; font-size: 16px; }
-        #finish-screen { display: none; font-size: 24px; font-weight: bold; padding: 20px; background: white; border: 2px solid #000; }
-    </style>
+  <title>パイズリバトル：大志の挑戦</title>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to bottom right, #ffe6e6, #ffccff);
+      color: #2e2e2e;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 2.5em;
+      color: #d6336c;
+      text-shadow: 1px 1px 2px #fff;
+    }
+    .section {
+      margin-bottom: 30px;
+    }
+    button {
+      font-size: 1.2em;
+      margin: 10px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      background: #ff6699;
+      color: white;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #e64d80;
+    }
+    .log {
+      background: rgba(255,255,255,0.85);
+      border: 2px solid #ff99cc;
+      padding: 10px;
+      border-radius: 10px;
+      height: 250px;
+      overflow-y: scroll;
+    }
+    select {
+      padding: 8px;
+      font-size: 1em;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+  </style>
 </head>
 <body>
-    <h1>パイズリバトル</h1>
-    <p>ステージを選択:</p>
-    <button class="button" onclick="selectStage('プール')">プール</button>
-    <button class="button" onclick="selectStage('混浴')">混浴</button>
-    <button class="button" onclick="selectStage('ホテル')">ホテル</button>
+  <h1>パイズリバトル：大志の挑戦</h1>
 
-    <div id="battle" style="display:none;">
-        <h2 id="opponent-name"></h2>
-        <div class="bar-container"><div id="opponent-bar" class="bar">0</div></div>
-        <p>大志</p>
-        <div class="bar-container"><div id="taishi-bar" class="bar">0</div></div>
+  <div class="section">
+    対戦相手を選んでください：
+    <select id="opponentSelect" onchange="resetGame()">
+      <option value="wachi">わちみなみ</option>
+      <option value="aizawa">相澤仁美</option>
+      <option value="nemoto">根本はるみ</option>
+      <option value="shinozaki">篠崎愛</option>
+    </select>
+  </div>
 
-        <button class="button" onclick="playerAction('耐久')">耐久</button>
-        <button class="button" onclick="playerAction('回避')">回避</button>
-        <button class="button" onclick="playerAction('カウンター')">カウンター</button>
-        <button class="button" onclick="playerAction('回復')">回復</button>
+  <div class="section">
+    <strong>対戦相手 HP:</strong> <span id="opponentHp">--</span><br>
+    <strong>大志 HP:</strong> <span id="taishiHp">--</span><br>
+    <strong>現在のターン:</strong> <span id="turnDisplay">--</span>
+  </div>
 
-        <div id="battle-log"></div>
-        <div id="finish-screen"></div>
-        <button class="button" id="retry-button" style="display:none;" onclick="startBattle()">再戦</button>
-    </div>
+  <div class="section">
+    <button onclick="attack('opponent')">対戦相手の攻撃</button>
+    <button onclick="attack('taishi')">大志の攻撃</button>
+    <button onclick="resetGame()">リセット</button>
+  </div>
 
-<script>
-    let stage = "";
-    let taishiHP = 200;
-    let opponentHP = 40;
-    let currentOpponent = null;
-    let wins = 0;
-    let losses = 0;
+  <div class="section log" id="logBox"></div>
 
-    const opponents = [
-        { 
-            name: "根本はるみ", 
-            hp: 50, 
-            attack: 20, 
-            healChance: 0.5, 
-            appearanceRate: 30, 
-            favoriteStage: "ホテル",
-            attackMessages: ["爆乳プレス！", "圧殺パイズリ！", "乳圧メガクラッシュ！"],
-            preBattleMessage: "覚悟しなさい、大志！",
-            victoryMessage: "根本「こんなに強いなんて…最高♡」",
-            defeatMessage: "根本「ちょっとぉ…もう出ちゃったのー？♡♡」"
-        },
-        { 
-            name: "相澤仁美", 
-            hp: 40, 
-            attack: 15, 
-            healChance: 0.3, 
-            appearanceRate: 25, 
-            favoriteStage: "混浴",
-            attackMessages: ["密着パイズリ！", "むぎゅっと爆乳アタック！", "滑らか乳首スライド！"],
-            preBattleMessage: "準備はいい？大志！",
-            victoryMessage: "相澤「やっぱりあなたは強いね…！♡」",
-            defeatMessage: "相澤「さすが大志…濃いわね♡！」"
-        },
-        { 
-            name: "MEGUMI", 
-            hp: 40, 
-            attack: 15, 
-            healChance: 0.3, 
-            appearanceRate: 25, 
-            favoriteStage: "プール",
-            attackMessages: ["ぬるぬるパイズリ！", "水着ごと圧殺！", "トルネード乳首責め！"],
-            preBattleMessage: "これから、楽しませてあげるわ♡",
-            victoryMessage: "MEGUMI「うっそ、私が負けちゃうなんて……！。」",
-            defeatMessage: "「楽しかったわ♡また遊んであげる」"
-        }
-    ];
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDw4UEwVm2h8bY5QLzE9cJUyodoqT6QD7E",
+      authDomain: "paizuri-battle.firebaseapp.com",
+      databaseURL: "https://paizuri-battle-default-rtdb.firebaseio.com",
+      projectId: "paizuri-battle",
+      storageBucket: "paizuri-battle.firebasestorage.app",
+      messagingSenderId: "336687148800",
+      appId: "1:336687148800:web:cd4a28f9a1cf66a77b4de5"
+    };
 
-    function selectStage(selectedStage) {
-        stage = selectedStage;
-        document.getElementById("battle").style.display = "block";
-        document.getElementById("finish-screen").style.display = "none";
-        document.getElementById("battle-log").innerHTML = ""; // ログリセット
-        document.getElementById("retry-button").style.display = "none"; // 再戦ボタン非表示
-        startBattle();
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const opponentHpSpan = document.getElementById("opponentHp");
+    const taishiHpSpan = document.getElementById("taishiHp");
+    const logBox = document.getElementById("logBox");
+    const turnDisplay = document.getElementById("turnDisplay");
+    const opponentSelect = document.getElementById("opponentSelect");
+
+    const SEIRUFU = {
+      wachi: {
+        attack: "ふふ、どう？このリズム…気持ちいいでしょ❤",
+        win: "うふ、イッちゃったのね…お疲れ様❤"
+      },
+      aizawa: {
+        attack: "あらあら、こんなに硬くして…ダメな子ね❤",
+        win: "ふふ、仁美に溺れちゃったのねぇ❤"
+      },
+      nemoto: {
+        attack: "ズンズンくるでしょ？もう耐えられない顔してる❤",
+        win: "やっぱり私のバストに勝てる男はいないのよ❤"
+      },
+      shinozaki: {
+        attack: "んっ、もっと感じていいのよ❤ どんどんきて…❤",
+        win: "ふふ、大志くん、可愛いイキ顔だったね❤"
+      },
+      taishi: {
+        attack: "うっ…！こんなので負けてたまるか…っ！",
+        win: "はぁ…はぁ…勝った…！お前の胸、最高だったぜ…！"
+      }
+    };
+
+    function getCurrentOpponent() {
+      return opponentSelect.value;
     }
 
-    function startBattle() {
-        currentOpponent = getRandomOpponent();
-        document.getElementById("opponent-name").innerHTML = `🔥 <span style="color: black;">ビキニ姿の${currentOpponent.name}が現れた！</span>`;
-
-        taishiHP = 200;
-        opponentHP = currentOpponent.hp;
-
-        // 試合開始前のセリフ
-        logMessage(`<span style="color: black;">${currentOpponent.preBattleMessage}</span>`);
-
-        if (stage === currentOpponent.favoriteStage) {
-            currentOpponent.hp += 10;
-            currentOpponent.attack += 5;
-            logMessage(`<span style="color: magenta;">✨ ${currentOpponent.name}は得意ステージで強化された！</span>`);
-        }
-
-        updateBars();
-        opponentAttack();
+    function updateUI(snapshot) {
+      const data = snapshot.val();
+      const opponent = getCurrentOpponent();
+      opponentHpSpan.textContent = data.hp?.opponent ?? "--";
+      taishiHpSpan.textContent = data.hp?.taishi ?? "--";
+      turnDisplay.textContent = data.turn === 'taishi' ? '大志' : '対戦相手';
+      logBox.innerHTML = (data.log || []).map(entry => `<div>${entry}</div>`).join('');
+      logBox.scrollTop = logBox.scrollHeight;
     }
 
-    function getRandomOpponent() {
-        let totalRate = opponents.reduce((sum, opponent) => sum + opponent.appearanceRate, 0);
-        let randomValue = Math.random() * totalRate;
+    db.ref().on('value', updateUI);
 
-        let sumRate = 0;
-        for (let opponent of opponents) {
-            sumRate += opponent.appearanceRate;
-            if (randomValue < sumRate) return opponent;
-        }
-        return opponents[0];
+    function rollDice() {
+      return Math.floor(Math.random() * 6 + 1) + Math.floor(Math.random() * 6 + 1);
     }
 
-    function updateBars() {
-        let taishiBar = document.getElementById("taishi-bar");
-        let opponentBar = document.getElementById("opponent-bar");
+    function attack(attacker) {
+      const opponent = getCurrentOpponent();
+      db.ref().once('value').then(snapshot => {
+        const data = snapshot.val();
+        if (!data.turn || data.turn !== attacker) return;
 
-        taishiBar.style.width = (taishiHP / 200) * 100 + "%";
-        opponentBar.style.width = (opponentHP / currentOpponent.hp) * 100 + "%";
+        const damage = rollDice();
+        const target = attacker === 'taishi' ? 'opponent' : 'taishi';
+        const newHp = Math.max(0, (data.hp[target] || 0) - damage);
+        const log = data.log || [];
+        const seirufu = SEIRUFU[attacker === 'taishi' ? 'taishi' : opponent].attack;
 
-        taishiBar.innerText = `${taishiHP}`;
-        opponentBar.innerText = `${opponentHP}`;
-    }
+        log.push(`${attacker === 'taishi' ? '大志' : '対戦相手'}の攻撃！ ${damage}ダメージ！`);
+        log.push(`「${seirufu}」`);
 
-    function opponentAttack() {
-        let attackPower = currentOpponent.attack;
-        let attackMessage = currentOpponent.attackMessages[Math.floor(Math.random() * currentOpponent.attackMessages.length)];
-        
-        logMessage(`<span style="color: magenta;">⚡ ${currentOpponent.name}の攻撃！🔥 **${attackMessage}**！</span>`);
-        taishiHP -= attackPower;
-        logMessage(`<span style="color: magenta;">⚡ ダメージ: ${attackPower}</span>`);
-        updateBars();
-
-        if (Math.random() < currentOpponent.healChance && opponentHP < currentOpponent.hp) {
-            opponentHP += 5;
-            logMessage(`<span style="color: magenta;">✨ ${currentOpponent.name}が **乳圧リカバリー** で回復！</span>`);
-            updateBars();
+        if (newHp === 0) {
+          const winLine = SEIRUFU[attacker === 'taishi' ? 'taishi' : opponent].win;
+          log.push(`「${winLine}」`);
         }
 
-        if (taishiHP <= 0) {
-            taishiHP = 0;
-            updateBars();
-            showFinishScreen(false);
-        }
+        db.ref().update({
+          [`hp/${target}`]: newHp,
+          log: log,
+          turn: newHp === 0 ? null : target
+        });
+      });
     }
 
-    function playerAction(action) {
-        let damage = 0;
-        if (action === "耐久") {
-            damage = 5;
-            logMessage(`<span style="color: blue;">🔥 **フル勃起耐久**！ 大志「耐えてみせる！」</span>`);
-        } else if (action === "回避") {
-            damage = 3;
-            logMessage(`<span style="color: blue;">🔥 **チンポビンタ**！ 大志「うおっ！！」</span>`);
-        } else if (action === "カウンター") {
-            damage = 10;
-            logMessage(`<span style="color: blue;">🔥 **腰振りパイズリ**！ 大志「ふんっ！ふんっ！ふんっ！ふんっ！」</span>`);
-        } else if (action === "回復") {
-            let healAmount = (stage === "混浴") ? 30 : 20;
-            taishiHP += healAmount;
-            logMessage(`<span style="color: blue;">✨ **勃起力回復**！ 大志が${healAmount}回復！</span>`);
-            updateBars();
-            opponentAttack();
-            return;
-        }
-
-        opponentHP -= damage;
-        logMessage(`<span style="color: blue;">🔥 ダメージ: ${damage}</span>`);
-
-        if (opponentHP <= 0) {
-            opponentHP = 0;
-            updateBars();
-            showFinishScreen(true);
-        } else {
-            opponentAttack();
-        }
+    function resetGame() {
+      const opponent = getCurrentOpponent();
+      db.ref().set({
+        hp: { opponent: 25, taishi: 25 },
+        log: ["❤ バトルスタート！相手は「" + opponentSelect.options[opponentSelect.selectedIndex].text + "」❤"],
+        turn: "taishi"
+      });
     }
-
-    function logMessage(message) {
-        let log = document.getElementById("battle-log");
-        log.innerHTML += message + "<br>";
-        log.scrollTop = log.scrollHeight;
-    }
-
-    function showFinishScreen(victory) {
-        let finishScreen = document.getElementById("finish-screen");
-        finishScreen.style.display = "block";
-        if (victory) {
-            wins++;
-            finishScreen.innerHTML = `<span style="color: magenta;">Finish! 大志の勝利♡♡</span><br><span style="color: magenta;">${currentOpponent.victoryMessage}</span>`;
-        } else {
-            losses++;
-            finishScreen.innerHTML = `<span style="color: red;">Finish! 大志の敗北♡</span><br><span style="color: red;">${currentOpponent.defeatMessage}</span>`;
-        }
-        document.getElementById("retry-button").style.display = "block";
-        document.getElementById("stats").innerText = `戦績: ${wins}勝 / ${losses}敗`;
-    }
-</script>
-
+  </script>
 </body>
 </html>
+
